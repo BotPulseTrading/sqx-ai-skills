@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de SQX para plugins</title>
+<!--
+  Simula la pestaña de Resultados de SQX para probar un plugin SIN abrir SQX.
+  Uso: abre este archivo servido por un servidor local (python -m http.server) o directamente en el navegador, y escribe la ruta del plugin.
+  Envía: SET_THEME, SET_LANGUAGE, STRATEGY_DATA. Responde: GET_STATS, GET_ORDERS, GET_LAST_SETTINGS_XML.
+  Incluye casos raros: datos faltantes (null y -99999999), nombres largos, estrategia sin nombre, respuesta lenta o perdida.
+  Los datos son inventados y solo sirven para probar la interfaz.
+-->
+<style>
+:root{--bg:#10151b;--surface:#18202a;--border:#2a3644;--text:#e6edf3;--muted:#8b98a8;--accent:#4da3ff}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;height:100vh}
+#bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+#bar label{display:flex;gap:6px;align-items:center;color:var(--muted)} select,input,button{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px}
+button{cursor:pointer} button:hover{border-color:var(--accent)} #path{width:340px}
+#wrap{flex:1;display:flex;min-height:0} #frameBox{flex:1;min-width:0;padding:10px} iframe{width:100%;height:100%;border:1px solid var(--border);border-radius:8px;background:#fff}
+#log{width:300px;border-left:1px solid var(--border);background:var(--surface);overflow:auto;padding:8px;font:11px/1.45 ui-monospace,Consolas,monospace;color:var(--muted)}
+#log b{color:var(--text)} .in{color:#7dd3fc}.out{color:#86efac}.err{color:#fca5a5}
+#sizer{display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+<div id="bar">
+  <label>Plugin <input id="path" value="../assets/plantilla-plugin/index.html"></label>
+  <button id="load">Cargar</button>
+  <label>Estrategia <select id="strat"></select></label>
+  <button id="send">Enviar STRATEGY_DATA</button>
+  <button id="sendAll">Enviar todas en secuencia</button>
+  <button id="sendEmpty">Enviar vacía</button>
+  <label>Tema <select id="theme"><option>light</option><option>dark</option></select></label>
+  <label>Idioma <select id="lang"><option>es</option><option>en</option><option>de</option><option>pt</option></select></label>
+  <label>Retraso (ms) <input id="delay" type="number" value="150" style="width:70px"></label>
+  <label><input id="drop" type="checkbox"> No responder (simular tiempo agotado)</label>
+  <span id="sizer">Ancho <select id="width"><option value="100%">100%</option><option value="1100px">1100</option><option value="900px">900</option><option value="700px">700</option><option value="520px">520</option></select></span>
+</div>
+<div id="wrap"><div id="frameBox"><iframe id="frame" title="plugin"></iframe></div><div id="log"></div></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const log = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = new Date().toLocaleTimeString() + ' ' + txt; $('log').prepend(d); while ($('log').children.length > 200) $('log').lastChild.remove(); };
+
+/* Datos inventados y deterministas */
+function rng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296; }
+const NAMES = ['Strategy 1.12.45', 'Strategy 2.7.101', 'Breakout H1 0.33.8', 'Mean reversion 4.1.7', 'Strategy 5.19.2', 'Trend follower 7.3.30',
+  'Strategy 8.2.4', 'Nombre extremadamente largo para comprobar que la tabla no se rompe con textos de sesenta caracteres 9.9.9', 'Sin métricas completas', 'Estrategia con valores indefinidos', 'Strategy 11.6.60', 'Strategy 12.4.1'];
+const STRATS = NAMES.map((name, i) => {
+  const r = rng(1000 + i * 77);
+  const stats = {
+    ProfitFactor: 1.05 + r() * 1.3, ReturnDDRatio: 0.8 + r() * 6, PctDrawdown: 4 + r() * 28, MaxConsecLoss: Math.round(3 + r() * 12),
+    StagnationPeriodPct: 8 + r() * 55, NetProfit: 800 + r() * 9000, NumberOfTrades: Math.round(120 + r() * 900), WinningPct: 38 + r() * 30,
+    Drawdown: 300 + r() * 2500, SharpeRatio: 0.2 + r() * 2.2, SQN: 0.8 + r() * 3.6, Stability: 0.4 + r() * 0.58
+  };
+  if (i === 8) { stats.ProfitFactor = null; stats.ReturnDDRatio = undefined; }
+  if (i === 9) { stats.PctDrawdown = -99999999; stats.StagnationPeriodPct = -99999999; stats.MaxConsecLoss = null; }
+  return { name, stats };
+});
+const sel = $('strat');
+STRATS.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + '. ' + s.name.slice(0, 40); sel.append(o); });
+
+function strategyData(i) { return { projectName: 'Demo project', databankName: 'Results', strategyName: STRATS[i].name, resultKey: 'Portfolio', isAlgoWizard: false, isAlgoWizardCloud: false }; }
+let current = 0;
+const frame = $('frame');
+const post = (msg) => { if (frame.contentWindow) { frame.contentWindow.postMessage(msg, '*'); log('out', 'SQX → ' + msg.type); } };
+
+function statsFor(i, params) {                                       // OOS algo peor que el total, para probar comparaciones
+  const base = Object.assign({}, STRATS[i].stats), f = params && params.sampleType === '20' ? 0.85 : 1;
+  for (const k of ['ProfitFactor', 'ReturnDDRatio', 'NetProfit', 'SQN']) if (typeof base[k] === 'number' && base[k] > 0) base[k] *= f;
+  return base;
+}
+function ordersFor(i) {
+  const r = rng(9000 + i), out = []; let balance = 10000, d = new Date(2019, 0, 3).getTime();
+  for (let n = 1; n <= 240; n++) {
+    d += (1 + r() * 4) * 86400000; const pl = (r() - 0.44) * 180; balance += pl;
+    out.push({ Ticket: n, Symbol: 'EURUSD', NumberOfTrade: n, OpenTime: d, CloseTime: d + r() * 7200000, Type: r() > 0.5 ? 1 : 2, CloseType: r() > 0.5 ? 3 : 2,
+      SampleType: n > 170 ? 20 : 10, OpenPrice: 1.1 + r() * .05, ClosePrice: 1.1 + r() * .05, Size: 0.1, ProfitLoss: pl, ProfitLossPct: pl / 100, MAE: -r() * 120, MFE: r() * 200, Balance: balance, TimeInTrade: r() * 7200 });
+  }
+  return out;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.source !== frame.contentWindow) return;
+  const m = e.data || {}; log('in', 'plugin → ' + (m.type || '(sin tipo)') + (m.params ? ' ' + JSON.stringify(m.params) : ''));
+  if (!m.type || !/^GET_/.test(m.type)) return;
+  if ($('drop').checked) { log('err', 'respuesta descartada (simulación)'); return; }
+  const wait = Math.max(0, Number($('delay').value) || 0);
+  setTimeout(() => {
+    if (m.type === 'GET_STATS') post({ type: 'STATS_RESPONSE', data: { stats: statsFor(current, m.params) } });
+    else if (m.type === 'GET_ORDERS') post({ type: 'ORDERS_RESPONSE', data: { orders: ordersFor(current) } });
+    else if (m.type === 'GET_LAST_SETTINGS_XML') post({ type: 'LAST_SETTINGS_XML_RESPONSE', data: { lastSettingsXml: '<Settings><Data symbol="EURUSD" timeframe="H1" from="2019-01-01" to="2024-12-31"/></Settings>' } });
+    else if (m.type === 'GET_SYMBOL_INFO') post({ type: 'SYMBOL_INFO_RESPONSE', data: null });
+    else if (m.type === 'GET_SOURCE_CODE') post({ type: 'SOURCE_CODE_RESPONSE', data: { success: 'ok', code: '// demo' } });
+  }, wait);
+});
+
+function loadPlugin() { frame.src = $('path').value; log('out', 'cargando ' + $('path').value); }
+frame.addEventListener('load', () => { post({ type: 'SET_THEME', theme: $('theme').value }); post({ type: 'SET_LANGUAGE', language: $('lang').value }); });
+$('load').onclick = loadPlugin;
+$('send').onclick = () => { current = Number(sel.value); post({ type: 'STRATEGY_DATA', data: strategyData(current) }); };
+$('sendEmpty').onclick = () => post({ type: 'STRATEGY_DATA', data: { projectName: '', databankName: '', strategyName: '', resultKey: 'Portfolio' } });
+$('sendAll').onclick = async () => { for (let i = 0; i < STRATS.length; i++) { sel.value = i; current = i; post({ type: 'STRATEGY_DATA', data: strategyData(i) }); await new Promise((r) => setTimeout(r, 900 + Number($('delay').value || 0))); } };
+$('theme').onchange = () => post({ type: 'SET_THEME', theme: $('theme').value });
+$('lang').onchange = () => post({ type: 'SET_LANGUAGE', language: $('lang').value });
+$('width').onchange = () => { $('frameBox').style.maxWidth = $('width').value; };
+const q = new URLSearchParams(location.search).get('plugin'); if (q) $('path').value = q;
+loadPlugin();
+</script>
+</body>
+</html>

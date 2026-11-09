@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plantilla SQX Pro</title>
+<!--
+  PLANTILLA PROFESIONAL PARA PLUGINS DE STRATEGYQUANT X  ·  skill sqx-plugin-pro
+  Cómo adaptarla: cambia primero CONFIG (métricas, pesos, filtros, textos) y la función computeScore.
+  La comunicación con SQX, el almacén, la cola, el tema, los idiomas y el aviso legal ya están resueltos.
+  Un solo archivo, sin red, sin librerías externas.
+-->
+<style>
+:root {
+  --bg:#ffffff; --surface:#f6f7f9; --surface-2:#eceff3; --border:#d9dee6; --text:#1f2933; --muted:#6b7785;
+  --accent:#2f7fd6; --ok:#1f9d55; --warn:#c98a00; --bad:#d64545; --radius:8px; --gap:12px;
+}
+[data-theme="dark"] {
+  --bg:#12161b; --surface:#1a2027; --surface-2:#232b34; --border:#2e3946; --text:#e6edf3; --muted:#8b98a8;
+  --accent:#4da3ff; --ok:#34d399; --warn:#f5b942; --bad:#f87171;
+}
+*, *::before, *::after { box-sizing:border-box; }
+html, body { height:100%; }
+body { margin:0; padding:16px; background:var(--bg); color:var(--text); overflow:hidden;
+  font:13px/1.45 system-ui,"Segoe UI",Arial,sans-serif; }
+#app { display:flex; flex-direction:column; height:100%; gap:var(--gap); }
+header { display:flex; align-items:center; gap:var(--gap); flex-shrink:0; flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; font-weight:700; letter-spacing:-.01em; }
+.spacer { flex:1; }
+.statusline { color:var(--muted); font-size:12px; flex-shrink:0; min-height:16px; }
+.statusline.error { color:var(--bad); }
+main { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:var(--gap); padding-right:4px; }
+button { font:inherit; color:var(--text); background:var(--surface); border:1px solid var(--border);
+  border-radius:6px; padding:6px 12px; cursor:pointer; transition:background .15s; }
+button:hover { background:var(--surface-2); }
+button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+button.danger { color:var(--bad); }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+.hero { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+.hero canvas { width:140px; height:140px; flex-shrink:0; }
+.hero .info { flex:1; min-width:260px; }
+.name { font-size:16px; font-weight:700; word-break:break-word; }
+.sub { color:var(--muted); font-size:12px; margin-top:2px; }
+.badge { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600;
+  border:1px solid currentColor; }
+.badge.ok { color:var(--ok); } .badge.warn { color:var(--warn); } .badge.bad { color:var(--bad); }
+.metric-row { display:grid; grid-template-columns:150px 1fr 70px 56px; align-items:center; gap:10px; padding:5px 0; }
+.bar { height:8px; background:var(--surface-2); border-radius:999px; overflow:hidden; }
+.bar > i { display:block; height:100%; border-radius:999px; transition:width .2s; }
+.num { text-align:right; font-variant-numeric:tabular-nums; }
+[data-tip] { position:relative; cursor:help; border-bottom:1px dotted var(--muted); }
+[data-tip]:hover::after, [data-tip]:focus::after { content:attr(data-tip); position:absolute; left:0; top:100%; margin-top:6px; z-index:50;
+  white-space:pre-line; width:max-content; max-width:280px; background:var(--surface-2); color:var(--text); border:1px solid var(--border);
+  padding:8px 10px; border-radius:6px; font-size:12px; font-weight:400; box-shadow:0 4px 12px rgba(0,0,0,.25); pointer-events:none; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+th, td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap; }
+th:first-child, td:first-child { text-align:left; max-width:240px; overflow:hidden; text-overflow:ellipsis; }
+th { position:sticky; top:0; background:var(--surface); font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); cursor:pointer; user-select:none; }
+tbody tr { cursor:pointer; } tbody tr:hover { background:var(--surface-2); } tbody tr.sel { background:var(--surface-2); outline:1px solid var(--accent); }
+.tablewrap { overflow:auto; border:1px solid var(--border); border-radius:var(--radius); max-height:300px; }
+.settings { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+.settings label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+.settings input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:5px 8px; }
+.empty { text-align:center; padding:36px 12px; color:var(--muted); }
+.empty b { display:block; color:var(--text); font-size:15px; margin-bottom:4px; }
+.hint { color:var(--muted); font-size:12px; }
+.disclaimer { margin-top:4px; padding-top:12px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);
+  line-height:1.5; text-align:justify; flex-shrink:0; }
+@media (max-height:560px) { .disclaimer { max-height:48px; overflow:auto; } }   /* en paneles muy bajos, el aviso sigue visible y con su propio scroll */
+@media (max-width:760px) { .metric-row { grid-template-columns:110px 1fr 60px 48px; } body { padding:10px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="title"></h1>
+    <span class="spacer"></span>
+    <button id="btnSettings"></button>
+    <button id="btnCsv"></button>
+    <button id="btnClear" class="danger"></button>
+  </header>
+  <div id="status" class="statusline" role="status" aria-live="polite"></div>
+  <main id="main"></main>
+  <div id="disclaimer" class="disclaimer"></div>
+</div>
+
+<script>
+'use strict';
+/* ==========================================================================================
+   1. CONFIG  ·  lo primero que se cambia al adaptar la plantilla
+   ========================================================================================== */
+const CONFIG = {
+  pluginId: 'sqxpro-plantilla',          // prefijo único para guardar datos
+  askTimeoutMs: 8000,                    // tiempo máximo de espera por respuesta de SQX
+  retries: 1,                            // reintentos por petición
+  // Cada métrica: puntos de control [valor, nota 0-100] (interpolación lineal) y peso relativo.
+  metrics: [
+    { id: 'ProfitFactor',        decimals: 2, weight: 25, points: [[1.0, 0], [1.3, 50], [2.0, 100]] },
+    { id: 'ReturnDDRatio',       decimals: 2, weight: 30, points: [[1, 0], [3, 60], [6, 100]] },
+    { id: 'PctDrawdown',         decimals: 1, weight: 25, points: [[30, 0], [15, 60], [5, 100]], unit: '%' },
+    { id: 'MaxConsecLoss',       decimals: 0, weight: 10, points: [[15, 0], [8, 60], [3, 100]] },
+    { id: 'StagnationPeriodPct', decimals: 1, weight: 10, points: [[60, 0], [30, 60], [10, 100]], unit: '%' }
+  ],
+  // Filtros duros: si se incumplen, la estrategia se marca "No cumple" aunque la nota sea alta.
+  filters: [ { metric: 'PctDrawdown', op: '<=', value: 20 } ],
+  grades: [[85, 'A'], [70, 'B'], [55, 'C'], [40, 'D'], [0, 'E']],
+  statusBands: { ok: 70, warn: 50 },     // nota mínima para "Cumple" y para "Revisar"
+  minCoverage: 0.8                       // parte mínima del peso con datos reales para poder decir "Cumple"
+};
+
+/* Textos de la interfaz (añade idiomas aquí; si falta uno se usa inglés). */
+const I18N = {
+  es: {
+    title: 'Plantilla SQX Pro', settings: 'Ajustes', csv: 'Copiar CSV', clear: 'Borrar todas', reset: 'Restaurar valores',
+    waiting: 'Selecciona una estrategia en la lista de resultados', waitingSub: 'El plugin leerá sus estadísticas y la guardará aquí.',
+    loading: 'Leyendo estadísticas ({i} de {n})…', ready: '{n} estrategias guardadas', readyOne: '1 estrategia guardada',
+    noneSaved: 'Ninguna estrategia guardada todavía', copied: 'CSV copiado ({n} filas)', copyFail: 'No se pudo copiar. Selecciona y copia el texto manualmente.',
+    confirmClear: '¿Seguro? Pulsa otra vez para borrar', retry: 'Reintentar',
+    strategy: 'Estrategia', score: 'Nota', state: 'Estado', ok: 'Cumple', warn: 'Revisar', bad: 'No cumple',
+    noData: 'SQX no entregó este dato', partial: 'Calculado con {u} de {t} métricas', weight: 'Peso', limit: 'Límite',
+    unverified: 'No verificable: falta el dato de {m}. No se puede dar por cumplido.',
+    savedAt: 'Guardada el {d}', filterFail: 'No cumple: {m} {op} {v}', weightsHelp: 'Los pesos son relativos: no tienen que sumar 100.',
+    badStrategy: 'SQX envió una estrategia sin nombre. Selecciónala otra vez.',
+    'err.timeout': 'SQX no respondió a tiempo. Selecciona la estrategia otra vez.',
+    'err.nostats': 'SQX no entregó estadísticas para esta estrategia.',
+    'err.generic': 'Ocurrió un error al leer la estrategia.',
+    'm.ProfitFactor': 'Profit Factor', 'm.ReturnDDRatio': 'Retorno / Drawdown', 'm.PctDrawdown': 'Drawdown máximo',
+    'm.MaxConsecLoss': 'Racha de pérdidas', 'm.StagnationPeriodPct': 'Estancamiento',
+    'd.ProfitFactor': 'Beneficio bruto ÷ pérdida bruta. Cuánto se gana por cada unidad perdida.',
+    'd.ReturnDDRatio': 'Beneficio neto ÷ drawdown máximo. Cuánto se obtiene por cada unidad de dolor.',
+    'd.PctDrawdown': 'Mayor caída de pico a valle. La caída que habría que soportar.',
+    'd.MaxConsecLoss': 'Mayor racha de operaciones perdedoras seguidas. Hay que estar preparado para ella.',
+    'd.StagnationPeriodPct': 'Porcentaje del tiempo sin hacer nuevos máximos de capital.',
+    weak: 'Débil', okay: 'Aceptable', good: 'Bueno',
+    disclaimer: 'Este análisis se ofrece únicamente con fines informativos y educativos dentro de StrategyQuant X. No constituye asesoramiento financiero, de inversión ni de trading. Todos los resultados se basan en datos históricos y en rendimiento hipotético, que pueden no reflejar las condiciones futuras del mercado. El rendimiento pasado no garantiza resultados futuros. Operar conlleva un riesgo sustancial: haz tu propia investigación y consulta con un asesor financiero autorizado antes de tomar decisiones. <b>La nota depende de los umbrales y pesos que tú has fijado.</b>'
+  },
+  en: {
+    title: 'SQX Pro Template', settings: 'Settings', csv: 'Copy CSV', clear: 'Clear all', reset: 'Reset values',
+    waiting: 'Select a strategy in the results list', waitingSub: 'The plugin will read its statistics and save it here.',
+    loading: 'Reading statistics ({i} of {n})…', ready: '{n} strategies saved', readyOne: '1 strategy saved',
+    noneSaved: 'No strategies saved yet', copied: 'CSV copied ({n} rows)', copyFail: 'Could not copy. Select and copy the text manually.',
+    confirmClear: 'Sure? Click again to delete', retry: 'Retry',
+    strategy: 'Strategy', score: 'Score', state: 'Status', ok: 'Pass', warn: 'Review', bad: 'Fail',
+    noData: 'SQX did not provide this value', partial: 'Calculated with {u} of {t} metrics', weight: 'Weight', limit: 'Limit',
+    unverified: 'Cannot be verified: {m} is missing. It cannot be treated as passing.',
+    savedAt: 'Saved on {d}', filterFail: 'Fails: {m} {op} {v}', weightsHelp: 'Weights are relative: they do not need to add up to 100.',
+    badStrategy: 'SQX sent a strategy without a name. Select it again.',
+    'err.timeout': 'SQX did not answer in time. Select the strategy again.',
+    'err.nostats': 'SQX returned no statistics for this strategy.',
+    'err.generic': 'An error occurred while reading the strategy.',
+    'm.ProfitFactor': 'Profit Factor', 'm.ReturnDDRatio': 'Return / Drawdown', 'm.PctDrawdown': 'Max drawdown',
+    'm.MaxConsecLoss': 'Losing streak', 'm.StagnationPeriodPct': 'Stagnation',
+    'd.ProfitFactor': 'Gross profit ÷ gross loss. How much is won per unit lost.',
+    'd.ReturnDDRatio': 'Net profit ÷ max drawdown. Reward per unit of pain.',
+    'd.PctDrawdown': 'Largest peak-to-valley drop. The fall you would have to endure.',
+    'd.MaxConsecLoss': 'Longest run of losing trades. You must be ready for it.',
+    'd.StagnationPeriodPct': 'Share of time without new equity highs.',
+    weak: 'Weak', okay: 'OK', good: 'Good',
+    disclaimer: 'This analysis is provided strictly for informational and educational purposes within StrategyQuant X. It does not constitute financial, investment, or trading advice. All results, including backtests and simulations, are based on historical data and hypothetical performance, which may not reflect future market conditions. Past performance is not indicative of future results. Trading involves substantial risk, and you should conduct your own independent research and consult a licensed financial advisor before making any investment or trading decisions. <b>The score depends on the thresholds and weights you set.</b>'
+  }
+};
+
+/* ==========================================================================================
+   2. ESTADO y utilidades
+   ========================================================================================== */
+const state = { lang: 'es', theme: 'light', strategy: null, selectedKey: null, items: {}, settings: { weights: {}, filters: {} },
+  status: { kind: 'idle' }, sort: { key: 'score', dir: -1 }, showSettings: false };
+const el = (id) => document.getElementById(id);
+const t = (k, vars) => {
+  let s = (I18N[state.lang] && I18N[state.lang][k]) || I18N.en[k] || k;
+  if (vars) for (const v in vars) s = s.split('{' + v + '}').join(vars[v]);
+  return s;
+};
+function h(tag, attrs, ...kids) {              // constructor de elementos seguro (nunca innerHTML con datos externos)
+  const n = document.createElement(tag);
+  for (const k in (attrs || {})) {
+    if (k === 'class') n.className = attrs[k];
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== null && attrs[k] !== undefined && attrs[k] !== false) n.setAttribute(k, attrs[k] === true ? '' : attrs[k]);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) n.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return n;
+}
+const isMissing = (v) => v === null || v === undefined || typeof v !== 'number' || !isFinite(v) || v <= -99999999;
+const fmt = (v, d) => isMissing(v) ? '—' : Number(v).toLocaleString(state.lang, { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* Almacén persistente con respaldo en memoria */
+const Store = (() => {
+  const mem = {}; let ok = true;
+  try { localStorage.setItem('__sqxpro', '1'); localStorage.removeItem('__sqxpro'); } catch (e) { ok = false; }
+  const k = (n) => CONFIG.pluginId + ':' + n;
+  return {
+    get(n, d) { try { if (ok) { const r = localStorage.getItem(k(n)); return r === null ? d : JSON.parse(r); } } catch (e) {} return n in mem ? mem[n] : d; },
+    set(n, v) { mem[n] = v; try { if (ok) localStorage.setItem(k(n), JSON.stringify(v)); } catch (e) {} }
+  };
+})();
+
+/* ==========================================================================================
+   3. COMUNICACIÓN CON SQX  ·  cola con una petición en vuelo y tiempo máximo
+   ========================================================================================== */
+const queue = []; let inflight = null;
+function ask(type, params, responseType) {
+  return new Promise((resolve, reject) => { queue.push({ type, params, responseType, resolve, reject }); pump(); });
+}
+function pump() {
+  if (inflight || !queue.length) return;
+  inflight = queue.shift();
+  inflight.timer = setTimeout(() => { const j = inflight; inflight = null; j.reject(new Error('timeout')); pump(); }, CONFIG.askTimeoutMs);
+  window.parent.postMessage({ type: inflight.type, params: inflight.params }, '*');
+}
+function settle(responseType, data) {
+  if (!inflight || inflight.responseType !== responseType) return;
+  clearTimeout(inflight.timer);
+  const j = inflight; inflight = null; j.resolve(data); pump();
+}
+async function askRetry(type, params, responseType) {
+  let last;
+  for (let i = 0; i <= CONFIG.retries; i++) { try { return await ask(type, params, responseType); } catch (e) { last = e; } }
+  throw last;
+}
+const isValidStrategy = (d) => !!(d && String(d.projectName || '').trim() && String(d.databankName || '').trim() && String(d.strategyName || '').trim());
+const keyOf = (d) => [d.projectName, d.databankName, d.strategyName].join('|');
+
+let loadToken = 0;
+async function loadStrategy(d) {
+  const token = ++loadToken, key = keyOf(d);
+  state.selectedKey = key;
+  const samples = [ { name: 'full', sampleType: '127' } ];             // añade { name:'oos', sampleType:'20' } si lo necesitas
+  const raw = {};
+  try {
+    for (let i = 0; i < samples.length; i++) {
+      state.status = { kind: 'loading', i: i + 1, n: samples.length }; render();
+      const r = await askRetry('GET_STATS', { resultKey: d.resultKey || 'Portfolio', direction: '0', sampleType: samples[i].sampleType, plType: '10' }, 'STATS_RESPONSE');
+      if (token !== loadToken) return;                                  // llegó otra estrategia: descarta esta
+      if (!r || !r.stats) throw new Error('nostats');
+      raw[samples[i].name] = r.stats;
+    }
+    state.items[key] = { key, project: d.projectName, databank: d.databankName, name: d.strategyName, savedAt: Date.now(), raw };
+    Store.set('items', state.items);
+    state.status = { kind: 'ready' };
+  } catch (e) {
+    if (token !== loadToken) return;
+    state.status = { kind: 'error', msg: t(e.message === 'timeout' ? 'err.timeout' : e.message === 'nostats' ? 'err.nostats' : 'err.generic'), d };
+  }
+  render();
+}
+
+window.addEventListener('message', (e) => {
+  const m = e.data; if (!m || typeof m !== 'object') return;
+  switch (m.type) {
+    case 'SET_THEME': setTheme(m.theme); break;
+    case 'SET_LANGUAGE': setLang(m.language || m.data); break;
+    case 'STRATEGY_DATA':
+      if (!isValidStrategy(m.data)) { if (m.data && (m.data.projectName || m.data.databankName)) { state.strategy = null; } return; }
+      state.strategy = m.data; loadStrategy(m.data); break;
+    case 'STATS_RESPONSE': settle('STATS_RESPONSE', m.data); break;
+    case 'ORDERS_RESPONSE': settle('ORDERS_RESPONSE', m.data); break;
+    case 'LAST_SETTINGS_XML_RESPONSE': settle('LAST_SETTINGS_XML_RESPONSE', m.data); break;
+  }
+});
+
+/* ==========================================================================================
+   4. LÓGICA  ·  funciones puras de cálculo (cámbialas según el plugin)
+   ========================================================================================== */
+function interp(points, x) {                                           // puntos [[valor, nota]…], acotado a 0-100
+  const p = points.slice().sort((a, b) => a[0] - b[0]);
+  if (x <= p[0][0]) return p[0][1];
+  if (x >= p[p.length - 1][0]) return p[p.length - 1][1];
+  for (let i = 1; i < p.length; i++) if (x <= p[i][0]) { const [x0, y0] = p[i - 1], [x1, y1] = p[i]; return y0 + (y1 - y0) * (x - x0) / (x1 - x0); }
+  return 0;
+}
+const weightOf = (m) => (state.settings.weights[m.id] !== undefined ? Number(state.settings.weights[m.id]) : m.weight);
+const filterValue = (f) => (state.settings.filters[f.metric] !== undefined ? Number(state.settings.filters[f.metric]) : f.value);
+
+function computeScore(stats) {
+  const parts = []; let sum = 0, wsum = 0, missing = 0;
+  for (const m of CONFIG.metrics) {
+    const v = stats ? stats[m.id] : undefined, w = Math.max(0, weightOf(m));
+    if (isMissing(v)) { missing++; parts.push({ id: m.id, value: null, note: null, weight: w }); continue; }   // sin dato: no cuenta como cero
+    const note = Math.max(0, Math.min(100, interp(m.points, v)));
+    parts.push({ id: m.id, value: v, note, weight: w }); sum += note * w; wsum += w;
+  }
+  const score = wsum > 0 ? sum / wsum : null;
+  const fails = [], unverified = [];
+  for (const f of CONFIG.filters) {
+    const v = stats ? stats[f.metric] : undefined, lim = filterValue(f);
+    if (isMissing(v)) { unverified.push(f.metric); continue; }          // un filtro sin dato NO se puede dar por cumplido
+    if (f.op === '<=' ? !(v <= lim) : !(v >= lim)) fails.push({ metric: f.metric, op: f.op, value: lim, actual: v });
+  }
+  const totalW = CONFIG.metrics.reduce((a, m) => a + Math.max(0, weightOf(m)), 0);
+  const coverage = totalW > 0 ? wsum / totalW : 0;                      // parte del peso con datos reales
+  let kind = 'bad';
+  if (score !== null && !fails.length) {
+    kind = score >= CONFIG.statusBands.ok ? 'ok' : score >= CONFIG.statusBands.warn ? 'warn' : 'bad';
+    if (kind === 'ok' && (unverified.length || coverage < CONFIG.minCoverage)) kind = 'warn';   // datos insuficientes: como mucho "Revisar"
+  }
+  const grade = score === null ? '—' : (CONFIG.grades.find((g) => score >= g[0]) || [0, '—'])[1];
+  return { score, parts, fails, unverified, coverage, kind, grade, used: CONFIG.metrics.length - missing, total: CONFIG.metrics.length };
+}
+function tipFor(m) {                                                    // el tooltip se genera con los mismos puntos que puntúan
+  const p = m.points.slice().sort((a, b) => a[1] - b[1]);
+  const u = m.unit || '';
+  return t('m.' + m.id) + '\n' + t('d.' + m.id) + '\n' + t('weak') + ': ' + p[0][0] + u + ' · ' + t('okay') + ': ' + p[1][0] + u + ' · ' + t('good') + ': ' + p[2][0] + u;
+}
+function csvCell(v) {                                                   // escapa y neutraliza inyección de fórmulas
+  let s = v === null || v === undefined ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function buildCsv() {
+  const rows = rowsData();
+  const head = [t('strategy'), t('score'), t('state')].concat(CONFIG.metrics.map((m) => t('m.' + m.id)));
+  const lines = [head.map(csvCell).join(';')];
+  for (const r of rows) lines.push([r.item.name, r.res.score === null ? '' : r.res.score.toFixed(1), t(r.res.kind)].concat(CONFIG.metrics.map((m) => { const v = r.item.raw.full && r.item.raw.full[m.id]; return isMissing(v) ? '' : v; })).map(csvCell).join(';'));
+  return { text: lines.join('\n'), n: rows.length };
+}
+function rowsData() {
+  const rows = Object.values(state.items).map((item) => ({ item, res: computeScore(item.raw.full) }));
+  const s = state.sort;
+  rows.sort((a, b) => {
+    const va = s.key === 'name' ? a.item.name.toLowerCase() : s.key === 'score' ? (a.res.score ?? -1) : s.key === 'state' ? ({ ok: 2, warn: 1, bad: 0 })[a.res.kind] : (a.item.raw.full && a.item.raw.full[s.key]);
+    const vb = s.key === 'name' ? b.item.name.toLowerCase() : s.key === 'score' ? (b.res.score ?? -1) : s.key === 'state' ? ({ ok: 2, warn: 1, bad: 0 })[b.res.kind] : (b.item.raw.full && b.item.raw.full[s.key]);
+    const na = isMissing(va) && typeof va !== 'string', nb = isMissing(vb) && typeof vb !== 'string';
+    if (na || nb) return na === nb ? 0 : na ? 1 : -1;                   // los sin dato siempre al final
+    return (va < vb ? -1 : va > vb ? 1 : 0) * s.dir;
+  });
+  return rows;
+}
+
+/* ==========================================================================================
+   5. VISTA
+   ========================================================================================== */
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let ring = null, ringScore = null, ringKind = 'ok'; const ro = new ResizeObserver(() => drawRing());
+function drawRing() {
+  if (!ring || !ring.isConnected) return;
+  const dpr = window.devicePixelRatio || 1, r = ring.getBoundingClientRect(), w = Math.max(10, Math.round(r.width)), hgt = Math.max(10, Math.round(r.height));
+  ring.width = w * dpr; ring.height = hgt * dpr;
+  const c = ring.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, hgt);
+  const cx = w / 2, cy = hgt / 2, rad = Math.min(w, hgt) / 2 - 12;
+  c.lineWidth = 12; c.lineCap = 'round';
+  c.strokeStyle = cssVar('--surface-2'); c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2); c.stroke();
+  if (ringScore !== null) {
+    c.strokeStyle = cssVar('--' + ringKind); c.beginPath(); c.arc(cx, cy, rad, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringScore / 100); c.stroke();
+  }
+  c.fillStyle = cssVar('--text'); c.font = '700 30px system-ui,Segoe UI,Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(ringScore === null ? '—' : Math.round(ringScore), cx, cy);
+}
+function setTheme(th) { state.theme = th === 'dark' ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', state.theme); drawRing(); }
+function setLang(code) {
+  const c = String(code || '').toLowerCase().slice(0, 2); state.lang = I18N[c] ? c : 'en';
+  document.documentElement.lang = state.lang; render();
+}
+function badge(kind) { const icon = kind === 'ok' ? '✓' : kind === 'warn' ? '!' : '✕'; return h('span', { class: 'badge ' + kind }, icon + ' ' + t(kind)); }
+
+function renderStatus() {
+  const s = state.status, n = Object.keys(state.items).length, box = el('status');
+  box.className = 'statusline' + (s.kind === 'error' ? ' error' : '');
+  box.replaceChildren();
+  if (s.kind === 'loading') box.append(t('loading', { i: s.i, n: s.n }));
+  else if (s.kind === 'error') { box.append(s.msg + ' '); box.append(h('button', { onclick: () => s.d && loadStrategy(s.d) }, t('retry'))); }
+  else box.append(n === 0 ? t('noneSaved') : n === 1 ? t('readyOne') : t('ready', { n }));
+}
+function renderHero(item) {
+  const res = computeScore(item.raw.full);
+  ringScore = res.score; ringKind = res.kind;
+  ring = h('canvas', { role: 'img', 'aria-label': t('score') + ' ' + (res.score === null ? '' : Math.round(res.score)) });
+  ro.disconnect(); ro.observe(ring);
+  const rows = res.parts.map((p) => {
+    const m = CONFIG.metrics.find((x) => x.id === p.id);
+    return h('div', { class: 'metric-row' },
+      h('span', { tabindex: '0', 'data-tip': tipFor(m) }, t('m.' + m.id)),
+      h('div', { class: 'bar' }, h('i', { style: 'width:' + (p.note === null ? 0 : p.note) + '%;background:var(--' + (p.note === null ? 'muted' : p.note >= CONFIG.statusBands.ok ? 'ok' : p.note >= CONFIG.statusBands.warn ? 'warn' : 'bad') + ')' })),
+      h('span', { class: 'num', title: p.value === null ? t('noData') : '' }, fmt(p.value, m.decimals) + (p.value !== null && m.unit ? m.unit : '')),
+      h('span', { class: 'num hint' }, p.note === null ? '—' : Math.round(p.note)));
+  });
+  const notes = [];
+  if (res.used < res.total) notes.push(h('div', { class: 'hint' }, t('partial', { u: res.used, t: res.total })));
+  for (const f of res.fails) notes.push(h('div', { class: 'hint', style: 'color:var(--bad)' }, t('filterFail', { m: t('m.' + f.metric), op: f.op, v: f.value })));
+  for (const id of res.unverified) notes.push(h('div', { class: 'hint', style: 'color:var(--warn)' }, t('unverified', { m: t('m.' + id) })));
+  const card = h('div', { class: 'card hero' }, ring,
+    h('div', { class: 'info' },
+      h('div', { class: 'name' }, item.name, ' ', badge(res.kind)),
+      h('div', { class: 'sub' }, item.project + ' · ' + item.databank + ' · ' + t('savedAt', { d: new Date(item.savedAt).toLocaleString(state.lang) })),
+      h('div', { style: 'margin-top:8px' }, rows), notes));
+  requestAnimationFrame(drawRing);
+  return card;
+}
+function renderTable() {
+  const rows = rowsData(); if (!rows.length) return null;
+  const cols = [{ key: 'name', label: t('strategy') }, { key: 'score', label: t('score') }, { key: 'state', label: t('state') }].concat(CONFIG.metrics.map((m) => ({ key: m.id, label: t('m.' + m.id), tip: tipFor(m) })));
+  const th = cols.map((c) => h('th', { 'data-tip': c.tip || false, onclick: () => { state.sort = { key: c.key, dir: state.sort.key === c.key ? -state.sort.dir : -1 }; render(); } },
+    c.label + (state.sort.key === c.key ? (state.sort.dir > 0 ? ' ▲' : ' ▼') : '')));
+  const tr = rows.map((r) => h('tr', { class: r.item.key === state.selectedKey ? 'sel' : '', onclick: () => { state.selectedKey = r.item.key; render(); } },
+    h('td', { title: r.item.name }, r.item.name), h('td', null, r.res.score === null ? '—' : fmt(r.res.score, 0)), h('td', null, badge(r.res.kind)),
+    CONFIG.metrics.map((m) => h('td', { title: isMissing(r.item.raw.full && r.item.raw.full[m.id]) ? t('noData') : '' }, fmt(r.item.raw.full && r.item.raw.full[m.id], m.decimals)))));
+  return h('div', { class: 'tablewrap' }, h('table', null, h('thead', null, h('tr', null, th)), h('tbody', null, tr)));
+}
+function renderSettings() {
+  const inputs = [];
+  for (const m of CONFIG.metrics) inputs.push(h('label', null, t('weight') + ' · ' + t('m.' + m.id),
+    h('input', { type: 'number', min: '0', step: '1', value: String(weightOf(m)), onchange: (e) => setSetting('weights', m.id, e.target.value, m.weight) })));
+  for (const f of CONFIG.filters) inputs.push(h('label', null, t('limit') + ' · ' + t('m.' + f.metric) + ' ' + f.op,
+    h('input', { type: 'number', step: 'any', value: String(filterValue(f)), onchange: (e) => setSetting('filters', f.metric, e.target.value, f.value) })));
+  return h('div', { class: 'card' }, h('div', { class: 'settings' }, inputs),
+    h('div', { class: 'hint', style: 'margin-top:8px' }, t('weightsHelp'), ' ', h('button', { onclick: () => { state.settings = { weights: {}, filters: {} }; Store.set('settings', state.settings); render(); } }, t('reset'))));
+}
+function setSetting(group, id, val, dflt) {
+  const n = Number(val); if (!isFinite(n) || n < 0 && group === 'weights') { render(); return; }
+  if (n === dflt) delete state.settings[group][id]; else state.settings[group][id] = n;
+  Store.set('settings', state.settings); render();                      // se recalcula todo desde los datos crudos guardados
+}
+function render() {
+  document.title = t('title');
+  el('title').textContent = t('title');
+  el('btnSettings').textContent = t('settings'); el('btnCsv').textContent = t('csv'); el('btnClear').textContent = t('clear');
+  el('disclaimer').innerHTML = t('disclaimer');                          // texto propio, no viene de SQX
+  renderStatus();
+  const main = el('main'), parts = [];
+  const sel = state.items[state.selectedKey];
+  if (state.showSettings) parts.push(renderSettings());
+  if (sel) parts.push(renderHero(sel));
+  else if (!Object.keys(state.items).length) parts.push(h('div', { class: 'card empty' }, h('b', null, t('waiting')), t('waitingSub')));
+  const tbl = renderTable(); if (tbl) parts.push(tbl);
+  main.replaceChildren(...parts);
+}
+
+/* ==========================================================================================
+   6. ARRANQUE
+   ========================================================================================== */
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  return Promise.resolve(fallbackCopy(text));
+}
+function fallbackCopy(text) {
+  const ta = h('textarea', { style: 'position:fixed;left:-9999px' }); ta.value = text; document.body.append(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); if (!ok) throw new Error('copy');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  state.items = Store.get('items', {}); state.settings = Store.get('settings', { weights: {}, filters: {} });
+  state.settings.weights = state.settings.weights || {}; state.settings.filters = state.settings.filters || {};
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(prefersDark ? 'dark' : 'light');
+  el('btnSettings').addEventListener('click', () => { state.showSettings = !state.showSettings; render(); });
+  el('btnCsv').addEventListener('click', async () => {
+    const { text, n } = buildCsv();
+    try { await copyText(text); el('status').textContent = t('copied', { n }); } catch (e) { el('status').textContent = t('copyFail'); el('status').className = 'statusline error'; }
+  });
+  let armed = null;                                                      // confirmación en dos clics (window.confirm puede estar bloqueado en un iframe)
+  el('btnClear').addEventListener('click', () => {
+    if (!Object.keys(state.items).length) return;
+    if (!armed) {
+      el('btnClear').textContent = t('confirmClear');
+      armed = setTimeout(() => { armed = null; render(); }, 4000); return;
+    }
+    clearTimeout(armed); armed = null;
+    state.items = {}; state.selectedKey = null; Store.set('items', state.items); state.status = { kind: 'idle' }; render();
+  });
+  render();
+});
+</script>
+</body>
+</html>
