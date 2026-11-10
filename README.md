@@ -23,4 +23,7 @@ Copia las carpetas de las skills que quieras a `%USERPROFILE%\.claude\skills\`. 
 - No está afiliado a StrategyQuant ni a MetaQuotes. Sus nombres son marcas de sus propietarios.
 - Estado de las pruebas: las plantillas y herramientas de `sqx-plugin-pro` se probaron con su simulador y pruebas unitarias; `trading-ui-pro` y `trading-bridge-pro` son guías de método basadas en proyectos reales y **no incluyen código ejecutable probado contra un broker real**. Pruébalo en tu entorno antes de fiarte.
 
+## Licencia
+Uso gratuito. No se permite redistribuir, vender ni publicar versiones modificadas sin autorización. Detalles en [`LICENSE`](LICENSE).
+
 © Bot Pulse Trading · https://www.youtube.com/@BotPulseTrading
